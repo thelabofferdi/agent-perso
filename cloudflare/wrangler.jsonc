@@ -1,0 +1,10 @@
+{
+  "name": "agent-perso",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "containers": [
+    { "class_name": "AgentContainer", "image": "../Dockerfile", "image_build_context": "..", "max_instances": 1 }
+  ],
+  "durable_objects": { "bindings": [{ "name": "AGENT", "class_name": "AgentContainer" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentContainer"] }]
+}

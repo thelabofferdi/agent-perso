@@ -1,0 +1,33 @@
+[project]
+name = "agent-perso"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "KOUAGOU Fernandez", email = "236823254+thelabofferdi@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.161.0",
+    "google-api-python-client>=2.201.0",
+    "google-auth>=2.62.0",
+    "google-auth-oauthlib>=1.5.0",
+    "httpx>=0.28.1",
+    "pydantic-ai-slim[openai]>=2.59.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "python-dotenv>=1.2.4",
+    "respx>=0.23.1",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+agent-perso = "agent_perso:main"
+
+[build-system]
+requires = ["uv_build>=0.12.18,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]

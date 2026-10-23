@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent IA personnel</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#6b7280; --line:#e5e7eb; --user:#2563eb; --bot:#f3f4f6; --warn:#fef3c7; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111214; --fg:#e8e8ea; --muted:#9ca3af; --line:#2a2c31; --bot:#1c1e22; --warn:#3a3217; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui,sans-serif; display:flex; flex-direction:column; height:100dvh; }
+  header { padding:12px 16px; border-bottom:1px solid var(--line); font-weight:600; display:flex; justify-content:space-between; }
+  header button { font:inherit; font-size:13px; background:none; border:1px solid var(--line); color:var(--muted); border-radius:6px; padding:2px 10px; cursor:pointer; }
+  #log { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .msg { max-width:min(720px,92%); padding:10px 14px; border-radius:12px; white-space:pre-wrap; word-break:break-word; }
+  .user { align-self:flex-end; background:var(--user); color:#fff; }
+  .bot { align-self:flex-start; background:var(--bot); }
+  .bot a { color:var(--user); }
+  .tools { font-size:12px; color:var(--muted); margin-top:6px; }
+  .approval { align-self:flex-start; background:var(--warn); border:1px solid var(--line); border-radius:12px; padding:12px 14px; max-width:min(720px,92%); }
+  .approval pre { margin:6px 0; white-space:pre-wrap; font:13px/1.4 ui-monospace,monospace; }
+  .approval button { font:inherit; padding:6px 14px; border-radius:8px; border:1px solid var(--line); cursor:pointer; margin-right:8px; }
+  .approval .ok { background:#16a34a; color:#fff; border-color:#16a34a; }
+  form { display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--line); }
+  input[type=text] { flex:1; font:inherit; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--fg); }
+  form button { font:inherit; padding:10px 18px; border-radius:10px; border:0; background:var(--user); color:#fff; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .hint { color:var(--muted); font-size:14px; }
+</style>
+</head>
+<body>
+<header><span>Agent IA personnel</span><button id="reset" type="button">Nouvelle conversation</button></header>
+<main id="log" aria-live="polite">
+  <div class="msg bot hint">Je peux chercher sur le web, donner la météo, gérer votre agenda Google, envoyer des e-mails (avec votre confirmation), lire/écrire dans Notion et chercher dans Google Drive.</div>
+</main>
+<form id="form">
+  <input id="input" type="text" placeholder="Votre demande…" autocomplete="off" aria-label="Message" required maxlength="4000">
+  <button id="send">Envoyer</button>
+</form>
+<script>
+const log = document.getElementById('log'), input = document.getElementById('input'), send = document.getElementById('send');
+let sessionId = null, accessCode = null;
+try { accessCode = sessionStorage.getItem('code'); } catch (e) {}
+
+function add(cls, text, tools) {
+  const d = document.createElement('div'); d.className = 'msg ' + cls;
+  d.innerHTML = text.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))
+                    .replace(/(https?:\/\/[^\s)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  if (tools && tools.length) { const t = document.createElement('div'); t.className = 'tools'; t.textContent = '🛠 ' + [...new Set(tools)].join(', '); d.appendChild(t); }
+  log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
+}
+
+async function api(path, body) {
+  const headers = {'Content-Type': 'application/json'};
+  if (accessCode) headers['X-Access-Code'] = accessCode;
+  let r = await fetch(path, {method: 'POST', headers, body: JSON.stringify(body)});
+  if (r.status === 401 && !(await r.clone().json().catch(() => ({}))).error) {
+    accessCode = prompt("Code d'accès :");
+    try { sessionStorage.setItem('code', accessCode || ''); } catch (e) {}
+    headers['X-Access-Code'] = accessCode || '';
+    r = await fetch(path, {method: 'POST', headers, body: JSON.stringify(body)});
+  }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || data.detail || 'Erreur ' + r.status);
+  return data;
+}
+
+function show(data) {
+  sessionId = data.session_id;
+  if (data.type === 'approval') return askApproval(data);
+  add('bot', data.text, data.tools_used);
+}
+
+function askApproval(data) {
+  const box = document.createElement('div'); box.className = 'approval';
+  box.innerHTML = '<strong>Confirmation requise</strong>';
+  data.approvals.forEach(a => { const p = document.createElement('pre'); p.textContent = a.tool + '\n' + JSON.stringify(a.args, null, 2); box.appendChild(p); });
+  const ok = document.createElement('button'); ok.className = 'ok'; ok.textContent = 'Confirmer';
+  const no = document.createElement('button'); no.textContent = 'Refuser';
+  const decide = async yes => {
+    ok.disabled = no.disabled = true;
+    const decisions = Object.fromEntries(data.approvals.map(a => [a.id, yes]));
+    try { show(await api('/api/approve', {session_id: sessionId, decisions})); }
+    catch (e) { add('bot', '⚠️ ' + e.message); }
+    box.remove();
+  };
+  ok.onclick = () => decide(true); no.onclick = () => decide(false);
+  box.append(ok, no); log.appendChild(box); log.scrollTop = log.scrollHeight;
+}
+
+document.getElementById('form').onsubmit = async e => {
+  e.preventDefault();
+  const message = input.value.trim(); if (!message) return;
+  input.value = ''; add('user', message); send.disabled = true;
+  const wait = add('bot hint', 'Réflexion…');
+  try { show(await api('/api/chat', {session_id: sessionId, message})); }
+  catch (err) { add('bot', '⚠️ ' + err.message); }
+  wait.remove(); send.disabled = false; input.focus();
+};
+document.getElementById('reset').onclick = () => { sessionId = null; location.reload(); };
+</script>
+</body>
+</html>
