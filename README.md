@@ -22,11 +22,11 @@ uv run pytest
 | Google | `GOOGLE_CALENDAR_ID` et `GOOGLE_DRIVE_FOLDER_ID` (agenda et dossier de test : l'agent n'accède à rien d'autre), `GOOGLE_CLIENT_ID/SECRET`, puis `uv run python scripts/google_login.py` → `GOOGLE_REFRESH_TOKEN`. Scopes minimaux : `calendar.events`, `drive.readonly` |
 | E-mail | `SMTP_USER`, `SMTP_PASSWORD` (mot de passe d'application), `SMTP_HOST/PORT/FROM` |
 
-## Déployer sur Cloudflare (Containers)
+## Déployer (Docker / machine Linux)
 ```bash
-cd cloudflare && npm install
-for k in RODIUM_API_KEY TAVILY_API_KEY OPENWEATHER_API_KEY NOTION_TOKEN NOTION_PARENT_PAGE_ID \
-         GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN SMTP_USER SMTP_PASSWORD; do npx wrangler secret put $k; done
-npx wrangler deploy   # nécessite Docker + plan Workers payant
+docker build -t agent-perso .
+docker run -p 8080:8080 --env-file .env agent-perso
 ```
-Le lien public du Worker est le livrable. Les secrets restent dans Cloudflare ; `APP_ACCESS_CODE` (optionnel) protège l'API.
+Sans Docker : `uv sync --no-dev` puis `uv run uvicorn app.main:app --host 0.0.0.0 --port 8080`.
+Les secrets viennent de variables d'environnement (`.env` non versionné) ; `APP_ACCESS_CODE` (optionnel) protège l'API.
+Les conversations sont gardées en mémoire : une seule instance du service.
