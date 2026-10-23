@@ -2,5 +2,4 @@
 .env
 .git
 tests
-cloudflare
 __pycache__
